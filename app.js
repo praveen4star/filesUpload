@@ -7,19 +7,21 @@ const multer = require('multer');
 const GridFsStorage = require('multer-gridfs-storage');
 const Grid = require('gridfs-stream');
 const methodOverride = require('method-override');
-
+const { stringify } = require('querystring');
+const Sending_mail = require('./Mail_verify');
 const app = express();
-
 // Middleware
+app.use(bodyParser.urlencoded({extended: true}));
 app.use(bodyParser.json());
 app.use(methodOverride('_method'));
 app.set('view engine', 'ejs');
 
 // Mongo URI
-const mongoURI = 'mongodb://brad:brad@ds257838.mlab.com:57838/mongouploads';
+const mongoURI = 'mongodb://localhost:27017/videodb';
 
 // Create mongo connection
 const conn = mongoose.createConnection(mongoURI);
+// user schema 
 
 // Init gfs
 let gfs;
@@ -37,7 +39,7 @@ const storage = new GridFsStorage({
     return new Promise((resolve, reject) => {
       crypto.randomBytes(16, (err, buf) => {
         if (err) {
-          return reject(err);
+         return reject(err);
         }
         const filename = buf.toString('hex') + path.extname(file.originalname);
         const fileInfo = {
@@ -51,36 +53,91 @@ const storage = new GridFsStorage({
 });
 const upload = multer({ storage });
 
-// @route GET /
-// @desc Loads form
-app.get('/', (req, res) => {
-  gfs.files.find().toArray((err, files) => {
-    // Check if files
-    if (!files || files.length === 0) {
-      res.render('index', { files: false });
-    } else {
-      files.map(file => {
-        if (
-          file.contentType === 'image/jpeg' ||
-          file.contentType === 'image/png'
-        ) {
-          file.isImage = true;
-        } else {
-          file.isImage = false;
-        }
-      });
-      res.render('index', { files: files });
-    }
-  });
-});
+// userschema 
+const userSchema = new mongoose.Schema({
+  fName : String,
+  lName : String,
+  Email : String,
+  password : String,
+})
 
+const Users =  mongoose.model('User', userSchema);
+// @route GET /
+app.get("/", function(req, res){
+  res.render("sign_up");
+});
+let isAuth = false;
+app.post('/', (req , res)=>{
+  const user = new Users ({
+    fName : req.body.fName,
+    lName : req.body.lName,
+    Email : req.body.email,
+    password : req.body.password
+  })
+  
+    try{
+       user.save();
+    }
+    catch(err){
+      console.log(err)
+    }
+
+  
+   
+  isAuth  = true;
+  res.redirect('/secret');
+})
+// sign in
+app.get('/login', (req ,res)=>{
+  res.render('login');
+});
+app.post('/login', (req, res)=>{
+  isAuth = true;
+  res.redirect('/secret')
+})
+// @desc Loads form
+app.get('/secret', (req, res) => {
+  if(isAuth){
+    gfs.files.find().toArray((err, files) => {
+      // Check if files
+      if (!files || files.length === 0) {
+        res.render('index', { files: false });
+      } else {
+        files.map(file => {
+          if (
+            file.contentType === 'video/mp4' ||
+            file.contentType === 'video/mp3'
+          ) {
+            file.isImage = true;
+          } else {
+            file.isImage = false;
+          }
+        });
+        res.render('index', { files: files });
+      }
+    });
+  }else{
+    res.redirect('/')
+  }
+  
+});
 // @route POST /upload
 // @desc  Uploads file to DB
+
 app.post('/upload', upload.single('file'), (req, res) => {
   // res.json({ file: req.file });
-  res.redirect('/');
+  isAuth = true;
+  res.redirect('/secret');
 });
-
+app.get('/forget', (req , res)=>{
+  res.render('forgot');
+});
+app.post('/forget', (req , res)=>{
+  
+  Sending_mail(req.body.email)
+  isAuth = true;
+  res.redirect('/secret')
+})
 // @route GET /files
 // @desc  Display all files in JSON
 app.get('/files', (req, res) => {
@@ -144,7 +201,7 @@ app.delete('/files/:id', (req, res) => {
       return res.status(404).json({ err: err });
     }
 
-    res.redirect('/');
+    res.redirect('/secret');
   });
 });
 
