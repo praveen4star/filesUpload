@@ -5,7 +5,7 @@ const send_Code = Math.round(Math.random()*10000);
 const sgMail = require('@sendgrid/mail');
 const { model } = require('mongoose');
 
-sgMail.setApiKey('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');
+sgMail.setApiKey(process.env.API_KEY);
 
 function Sending_mail(email)
 {
